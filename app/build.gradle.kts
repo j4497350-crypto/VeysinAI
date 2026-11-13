@@ -8,6 +8,10 @@ android {
     namespace = "com.veysinai.app"
     compileSdk = 35
 
+    buildFeatures {
+        buildConfig = true
+    }
+
     defaultConfig {
         applicationId = "com.veysinai.app"
         minSdk = 24
