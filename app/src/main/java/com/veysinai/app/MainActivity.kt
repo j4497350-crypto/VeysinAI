@@ -13,6 +13,12 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
+import com.google.firebase.Firebase
+import com.google.firebase.ai.ai
+import com.google.firebase.ai.type.GenerativeBackend
+import com.google.firebase.appcheck.FirebaseAppCheck
+import com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory
+import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
@@ -20,23 +26,42 @@ import com.google.mlkit.nl.translate.Translation
 import com.google.mlkit.nl.translate.TranslatorOptions
 import com.google.mlkit.nl.translate.TranslateLanguage
 import com.google.mlkit.common.model.DownloadConditions
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import java.util.Locale
 
 class MainActivity : Activity(), TextToSpeech.OnInitListener {
     private var tts: TextToSpeech? = null
     private lateinit var input: EditText
     private lateinit var output: TextView
+    private lateinit var chatInput: EditText
+    private lateinit var chatOutput: TextView
     private lateinit var emailInput: EditText
     private lateinit var passwordInput: EditText
     private lateinit var authStatus: TextView
     private lateinit var auth: FirebaseAuth
     private lateinit var firestore: FirebaseFirestore
+    private val chatScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private var sendChatMessage: ((String) -> Unit)? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (BuildConfig.DEBUG) {
+            FirebaseAppCheck.getInstance().installAppCheckProviderFactory(
+                DebugAppCheckProviderFactory.getInstance()
+            )
+        } else {
+            FirebaseAppCheck.getInstance().installAppCheckProviderFactory(
+                PlayIntegrityAppCheckProviderFactory.getInstance()
+            )
+        }
         tts = TextToSpeech(this, this)
         auth = FirebaseAuth.getInstance()
         firestore = FirebaseFirestore.getInstance()
+        setupAiChat()
         window.statusBarColor = Color.rgb(13, 18, 38)
         window.navigationBarColor = Color.rgb(13, 18, 38)
 
@@ -167,20 +192,52 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
         root.addView(speak, fullWidth())
 
-        listOf("AI Chat", "AI Image", "AI Video").forEach { feature ->
+        val chatHeading = TextView(this).apply {
+            text = "Veysin AI Chat"
+            textSize = 21f
+            setTextColor(Color.WHITE)
+            gravity = Gravity.CENTER
+            setPadding(0, 24, 0, 10)
+        }
+        root.addView(chatHeading)
+        chatOutput = TextView(this).apply {
+            text = "Hello! Ask me anything."
+            textSize = 16f
+            setTextColor(Color.WHITE)
+            setPadding(12, 12, 12, 12)
+            setBackgroundColor(Color.rgb(35, 43, 67))
+        }
+        root.addView(chatOutput, fullWidth())
+        chatInput = EditText(this).apply {
+            hint = "Type your message..."
+            textSize = 16f
+            setTextColor(Color.WHITE)
+            setHintTextColor(Color.LTGRAY)
+            setPadding(14, 12, 14, 12)
+            setBackgroundColor(Color.rgb(35, 43, 67))
+        }
+        root.addView(chatInput, fullWidth())
+        val send = Button(this).apply {
+            text = "Send message"
+            isAllCaps = false
+            setOnClickListener { onSendChat() }
+        }
+        root.addView(send, fullWidth())
+
+        listOf("AI Image", "AI Video").forEach { feature ->
             val button = Button(this).apply {
                 text = feature
                 isAllCaps = false
                 setOnClickListener {
                     Toast.makeText(this@MainActivity,
-                        "$feature still needs a secure AI provider connection.",
+                        "$feature is not enabled yet. AI Chat is connected separately.",
                         Toast.LENGTH_LONG).show()
                 }
             }
             root.addView(button, fullWidth())
         }
         val note = TextView(this).apply {
-            text = "Translation runs on-device. Bengali voice uses Android Text-to-Speech. Account data is stored in Firebase when the project services are enabled."
+            text = "AI Chat uses Firebase AI Logic and the Gemini Developer API. Free-tier quotas apply. Translation runs on-device."
             textSize = 12f
             setTextColor(Color.rgb(145, 155, 180))
             gravity = Gravity.CENTER
@@ -188,6 +245,42 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
         root.addView(note)
         setContentView(ScrollView(this).apply { addView(root) })
+    }
+
+    private fun setupAiChat() {
+        try {
+            val model = Firebase.ai(backend = GenerativeBackend.googleAI())
+                .generativeModel("gemini-3.8-flash")
+            val chat = model.startChat()
+            sendChatMessage = { message ->
+                chatScope.launch {
+                    chatOutput.text = "You: $message\n\nVeysin AI is thinking..."
+                    try {
+                        val response = chat.sendMessage(message)
+                        chatOutput.text = "You: $message\n\nVeysin AI: ${response.text ?: "No text response."}"
+                    } catch (error: Exception) {
+                        chatOutput.text = "Message could not be sent. Check Firebase AI Logic setup, App Check debug token, and internet connection.\n\nDetails: ${error.localizedMessage ?: "Unknown error"}"
+                    }
+                }
+            }
+        } catch (error: Exception) {
+            sendChatMessage = null
+        }
+    }
+
+    private fun onSendChat() {
+        val message = chatInput.text.toString().trim()
+        if (message.isEmpty()) {
+            Toast.makeText(this, "Type a message first.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val sender = sendChatMessage
+        if (sender == null) {
+            Toast.makeText(this, "AI Chat setup is not ready. Check Firebase AI Logic.", Toast.LENGTH_LONG).show()
+            return
+        }
+        chatInput.text.clear()
+        sender(message)
     }
 
     private fun signIn() {
@@ -305,6 +398,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     override fun onDestroy() {
+        chatScope.cancel()
         tts?.stop()
         tts?.shutdown()
         super.onDestroy()
