@@ -271,7 +271,9 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
                     chatOutput.text = "You: $message\n\nVeysin AI is thinking..."
                     try {
                         val response = chat.sendMessage(message)
-                        chatOutput.text = "You: $message\n\nVeysin AI: ${response.text ?: "No text response."}"
+                        val answer = response.text ?: "উত্তর পাওয়া যায়নি।"
+                        chatOutput.text = "You: $message\\n\\nVeysin AI: $answer"
+                        speakBengali(answer)
                     } catch (error: Exception) {
                         chatOutput.text = "Message could not be sent. Check Firebase AI Logic setup, App Check debug token, and internet connection.\n\nDetails: ${error.localizedMessage ?: "Unknown error"}"
                     }
