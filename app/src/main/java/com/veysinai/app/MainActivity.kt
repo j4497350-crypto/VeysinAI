@@ -3,6 +3,12 @@ package com.veysinai.app
 import android.app.Activity
 import android.os.Bundle
 import android.graphics.Color
+import android.speech.RecognitionListener
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
+import android.content.Intent
+import android.net.Uri
+import android.content.pm.PackageManager
 import android.speech.tts.TextToSpeech
 import android.text.InputType
 import android.view.Gravity
@@ -35,6 +41,8 @@ import java.util.Locale
 
 class MainActivity : Activity(), TextToSpeech.OnInitListener {
     private var tts: TextToSpeech? = null
+    private var speechRecognizer: SpeechRecognizer? = null
+    private val audioPermissionRequest = 4102
     private lateinit var input: EditText
     private lateinit var output: TextView
     private lateinit var chatInput: EditText
@@ -223,6 +231,12 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
             setOnClickListener { onSendChat() }
         }
         root.addView(send, fullWidth())
+        val voiceButton = Button(this).apply {
+            text = "🎙 কথা বলে নির্দেশ দিন"
+            isAllCaps = false
+            setOnClickListener { startVoiceInput() }
+        }
+        root.addView(voiceButton, fullWidth())
 
         listOf("AI Image", "AI Video").forEach { feature ->
             val button = Button(this).apply {
@@ -265,6 +279,93 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
             }
         } catch (error: Exception) {
             sendChatMessage = null
+        }
+    }
+
+    private fun startVoiceInput() {
+        if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(android.Manifest.permission.RECORD_AUDIO), audioPermissionRequest)
+            return
+        }
+        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
+            Toast.makeText(this, "এই ফোনে Speech Recognition পাওয়া যাচ্ছে না।", Toast.LENGTH_LONG).show()
+            return
+        }
+        if (speechRecognizer == null) {
+            speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
+            speechRecognizer?.setRecognitionListener(object : RecognitionListener {
+                override fun onReadyForSpeech(params: Bundle?) {
+                    chatOutput.text = "শুনছি… বাংলায় আপনার নির্দেশ বলুন।"
+                }
+                override fun onResults(results: Bundle?) {
+                    val spoken = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty()
+                    if (spoken.isNotBlank()) {
+                        chatInput.setText(spoken)
+                        runVoiceCommand(spoken)
+                    } else {
+                        chatOutput.text = "কথা বুঝতে পারিনি। আবার চেষ্টা করুন।"
+                    }
+                }
+                override fun onError(error: Int) {
+                    chatOutput.text = "ভয়েস শোনা যায়নি। আবার মাইক্রোফোন চাপুন। (ত্রুটি: $error)"
+                }
+                override fun onBeginningOfSpeech() {}
+                override fun onBufferReceived(buffer: ByteArray?) {}
+                override fun onEndOfSpeech() {}
+                override fun onEvent(eventType: Int, params: Bundle?) {}
+                override fun onPartialResults(partialResults: Bundle?) {}
+                override fun onRmsChanged(rmsdB: Float) {}
+            })
+        }
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "bn-IN")
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "bn-IN")
+            putExtra(RecognizerIntent.EXTRA_PROMPT, "বাংলায় আপনার নির্দেশ বলুন")
+        }
+        speechRecognizer?.startListening(intent)
+    }
+
+    private fun runVoiceCommand(command: String) {
+        val normalized = command.lowercase(Locale.ROOT)
+        when {
+            normalized.contains("ইউটিউব") || normalized.contains("youtube") -> {
+                openExternal(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com")))
+                chatOutput.text = "Veysin AI: YouTube খোলার চেষ্টা করছি।"
+            }
+            normalized.contains("ফোন") || normalized.contains("কল") || normalized.contains("call") -> {
+                openExternal(Intent(Intent.ACTION_DIAL))
+                chatOutput.text = "Veysin AI: ফোনের ডায়ালার খুলেছি। নম্বর দেখে নিজে কল করুন।"
+                speakBengali("ফোনের ডায়ালার খুলেছি। নম্বর দেখে নিজে কল করুন।")
+            }
+            normalized.contains("গুগল") || normalized.contains("সার্চ") || normalized.contains("search") -> {
+                val query = Uri.encode(command)
+                openExternal(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/search?q=$query")))
+                chatOutput.text = "Veysin AI: আপনার কথাটি ওয়েবে খুঁজছি।"
+            }
+            else -> onSendChat()
+        }
+    }
+
+    private fun openExternal(intent: Intent) {
+        try {
+            startActivity(intent)
+        } catch (_: Exception) {
+            Toast.makeText(this, "এই কাজটি করার অ্যাপ পাওয়া যায়নি।", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun speakBengali(text: String) {
+        tts?.language = Locale("bn", "IN")
+        tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "veysin-voice-reply")
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == audioPermissionRequest && grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
+            startVoiceInput()
+        } else if (requestCode == audioPermissionRequest) {
+            Toast.makeText(this, "ভয়েস ব্যবহারের জন্য মাইক্রোফোন অনুমতি দরকার।", Toast.LENGTH_LONG).show()
         }
     }
 
@@ -399,6 +500,8 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
     override fun onDestroy() {
         chatScope.cancel()
+        speechRecognizer?.destroy()
+        speechRecognizer = null
         tts?.stop()
         tts?.shutdown()
         super.onDestroy()
