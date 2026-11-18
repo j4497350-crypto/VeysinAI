@@ -3,7 +3,7 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <application
         android:allowBackup="true"
-        android:label="Life in India Diaries Promotion"
+        android:label="Veysin AI" android:icon="@drawable/ic_veysin_logo" android:roundIcon="@drawable/ic_veysin_logo"
         android:theme="@android:style/Theme.Material.Light.NoActionBar"
         android:supportsRtl="true">
         <activity
