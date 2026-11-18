@@ -56,6 +56,15 @@ class MainActivity : Activity() {
             ).apply { bottomMargin = 8 })
         }
 
+        val logo = ImageView(this).apply {
+            setImageResource(R.drawable.ic_veysin_logo)
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            contentDescription = "Veysin AI logo"
+        }
+        root.addView(logo, LinearLayout.LayoutParams(88, 88).apply {
+            gravity = Gravity.CENTER_HORIZONTAL
+            bottomMargin = 6
+        })
         addFull(heading("Life in India Diaries", 27f))
         addFull(heading("Free • Safe • Organic Promotion", 15f))
         val safety = TextView(this).apply {
