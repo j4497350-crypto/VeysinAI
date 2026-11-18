@@ -59,14 +59,14 @@ class MainActivity : Activity() {
         val logo = ImageView(this).apply {
             setImageResource(R.drawable.ic_veysin_logo)
             scaleType = ImageView.ScaleType.FIT_CENTER
-            contentDescription = "Veysin AI logo"
+            contentDescription = "ভেইসিন এআই লোগো"
         }
         root.addView(logo, LinearLayout.LayoutParams(88, 88).apply {
             gravity = Gravity.CENTER_HORIZONTAL
             bottomMargin = 6
         })
         addFull(heading("Life in India Diaries", 27f))
-        addFull(heading("Free • Safe • Organic Promotion", 15f))
+        addFull(heading("বিনামূল্যে • নিরাপদ • স্বাভাবিক প্রচার", 15f))
         val safety = TextView(this).apply {
             text = "নিরাপত্তা: এই অ্যাপ Facebook পাসওয়ার্ড চাইবে না, অটো-ফলোয়ার/ভুয়া ভিউ তৈরি করবে না এবং আপনার হয়ে কোনো লাইক বা ফলো করবে না।"
             textSize = 14f
@@ -77,37 +77,37 @@ class MainActivity : Activity() {
         addFull(safety)
 
         addFull(heading("১) ভিডিওর লিংক"))
-        link = field("Facebook Reel / ভিডিও লিংক", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI)
+        link = field("ফেসবুক রিল বা ভিডিওর লিংক দিন", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI)
         addFull(link)
         addFull(heading("২) ভিডিওর বিষয় (ঐচ্ছিক)"))
-        topic = field("যেমন: Bangalore life, daily vlog, comedy")
+        topic = field("যেমন: বেঙ্গালুরুর জীবন, প্রতিদিনের ভিডিও, হাসির ভিডিও")
         addFull(topic)
-        addFull(button("ক্যাপশন ও হ্যাশট্যাগ তৈরি করুন") { makeCaption() })
+        addFull(button("ভিডিওর লেখা ও হ্যাশট্যাগ তৈরি করুন") { makeCaption() })
         result = TextView(this).apply {
-            text = "তৈরি করা ক্যাপশন এখানে দেখা যাবে।"
+            text = "তৈরি করা ভিডিওর লেখা এখানে দেখা যাবে।"
             textSize = 15f
             setTextColor(Color.WHITE)
             setPadding(14, 14, 14, 14)
             setBackgroundColor(Color.rgb(30, 49, 72))
         }
         addFull(result)
-        addFull(button("ক্যাপশন কপি করুন") {
+        addFull(button("ভিডিওর লেখা কপি করুন") {
             val clip = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-            clip.setPrimaryClip(ClipData.newPlainText("Promotion caption", result.text))
-            Toast.makeText(this, "কপি হয়েছে", Toast.LENGTH_SHORT).show()
+            clip.setPrimaryClip(ClipData.newPlainText("ভিডিওর লেখা", result.text))
+            Toast.makeText(this, "লেখা কপি হয়েছে", Toast.LENGTH_SHORT).show()
         })
-        addFull(button("ভিডিও শেয়ার করুন") { shareVideo() })
+        addFull(button("ভিডিও ভাগ করে পাঠান") { shareVideo() })
 
-        addFull(heading("৩) নিজের অগ্রগতি লিখে রাখুন"))
-        views = field("বর্তমান ভিউ", InputType.TYPE_CLASS_NUMBER)
-        followers = field("বর্তমান ফলোয়ার", InputType.TYPE_CLASS_NUMBER)
+        addFull(heading("৩) নিজের অগ্রগতির হিসাব রাখুন"))
+        views = field("এখন পর্যন্ত কতবার দেখা হয়েছে", InputType.TYPE_CLASS_NUMBER)
+        followers = field("এখন কতজন অনুসরণকারী আছেন", InputType.TYPE_CLASS_NUMBER)
         addFull(views)
         addFull(followers)
-        addFull(button("অগ্রগতি সেভ করুন") { saveProgress() })
-        addFull(button("সেভ করা অগ্রগতি দেখুন") { showProgress() })
+        addFull(button("হিসাব সংরক্ষণ করুন") { saveProgress() })
+        addFull(button("সংরক্ষিত হিসাব দেখুন") { showProgress() })
 
         val note = TextView(this).apply {
-            text = "মনে রাখবেন: লিংক পেস্ট করলেই Facebook-এর ভিউ বা ফলোয়ার স্বয়ংক্রিয়ভাবে বাড়ে না। এই টুল নিরাপদ প্রচারের লেখা ও পরিকল্পনা বানায়। পোস্টের ফলাফল Facebook/Meta-তে আলাদাভাবে দেখুন।"
+            text = "মনে রাখবেন: লিংক দিলেই ফেসবুকে দেখা বা অনুসরণকারীর সংখ্যা নিজে থেকে বাড়ে না। এই অ্যাপ নিরাপদ প্রচারের লেখা ও পরিকল্পনা তৈরি করে। পোস্টের ফলাফল ফেসবুক অ্যাপে আলাদাভাবে দেখুন।"
             textSize = 13f
             setTextColor(Color.rgb(190, 200, 215))
             setPadding(0, 18, 0, 8)
@@ -120,7 +120,7 @@ class MainActivity : Activity() {
         val url = link.text.toString().trim()
         val subject = topic.text.toString().trim().ifBlank { "আমার নতুন ভিডিও" }
         if (url.isNotBlank() && !(url.startsWith("https://") || url.startsWith("http://"))) {
-            Toast.makeText(this, "সঠিক https:// ভিডিও লিংক দিন", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "সঠিক ভিডিও লিংক দিন", Toast.LENGTH_LONG).show()
             return
         }
         result.text = "$subject ❤️\n\nভিডিওটি ভালো লাগলে আপনার মতামত কমেন্টে জানাবেন। এমন আরও ভিডিও পেতে Life in India Diaries ফলো করে পাশে থাকুন।\n\n#LifeInIndiaDiaries #IndiaVlog #BanglaVlog #FacebookReels #DailyLife"
@@ -136,23 +136,23 @@ class MainActivity : Activity() {
             type = "text/plain"
             putExtra(Intent.EXTRA_TEXT, result.text.toString() + "\n" + url)
         }
-        startActivity(Intent.createChooser(share, "ভিডিও শেয়ার করুন"))
+        startActivity(Intent.createChooser(share, "ভিডিও ভাগ করে পাঠান"))
     }
 
     private fun saveProgress() {
         val v = views.text.toString().toLongOrNull()
         val f = followers.text.toString().toLongOrNull()
         if (v == null || f == null) {
-            Toast.makeText(this, "ভিউ ও ফলোয়ারের সংখ্যা লিখুন", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "দেখার সংখ্যা ও অনুসরণকারীর সংখ্যা লিখুন", Toast.LENGTH_SHORT).show()
             return
         }
         prefs.edit().putLong("views", v).putLong("followers", f).apply()
-        Toast.makeText(this, "অগ্রগতি এই ফোনে সেভ হয়েছে", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, "হিসাব এই ফোনে সংরক্ষণ হয়েছে", Toast.LENGTH_SHORT).show()
     }
 
     private fun showProgress() {
         val v = prefs.getLong("views", 0L)
         val f = prefs.getLong("followers", 0L)
-        Toast.makeText(this, "সেভ করা তথ্য: ভিউ $v • ফলোয়ার $f", Toast.LENGTH_LONG).show()
+        Toast.makeText(this, "সংরক্ষিত হিসাব: দেখা হয়েছে $v বার • অনুসরণকারী $f জন", Toast.LENGTH_LONG).show()
     }
 }
