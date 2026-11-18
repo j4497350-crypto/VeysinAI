@@ -2,405 +2,148 @@ package com.veysinai.app
 
 import android.app.Activity
 import android.os.Bundle
+import android.content.Intent
+import android.content.ClipboardManager
+import android.content.ClipData
+import android.content.Context
 import android.graphics.Color
-import android.speech.tts.TextToSpeech
-import android.text.InputType
 import android.view.Gravity
 import android.view.ViewGroup
-import android.widget.Button
-import android.widget.EditText
-import android.widget.LinearLayout
-import android.widget.ScrollView
-import android.widget.TextView
-import android.widget.Toast
-import com.google.firebase.Firebase
-import com.google.firebase.ai.ai
-import com.google.firebase.ai.type.GenerativeBackend
-import com.google.firebase.appcheck.FirebaseAppCheck
-import com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory
-import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.SetOptions
-import com.google.mlkit.nl.translate.Translation
-import com.google.mlkit.nl.translate.TranslatorOptions
-import com.google.mlkit.nl.translate.TranslateLanguage
-import com.google.mlkit.common.model.DownloadConditions
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.launch
-import java.util.Locale
+import android.widget.*
+import android.text.InputType
 
-class MainActivity : Activity(), TextToSpeech.OnInitListener {
-    private var tts: TextToSpeech? = null
-    private lateinit var input: EditText
-    private lateinit var output: TextView
-    private lateinit var chatInput: EditText
-    private lateinit var chatOutput: TextView
-    private lateinit var emailInput: EditText
-    private lateinit var passwordInput: EditText
-    private lateinit var authStatus: TextView
-    private lateinit var auth: FirebaseAuth
-    private lateinit var firestore: FirebaseFirestore
-    private val chatScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
-    private var sendChatMessage: ((String) -> Unit)? = null
+class MainActivity : Activity() {
+    private lateinit var link: EditText
+    private lateinit var topic: EditText
+    private lateinit var result: TextView
+    private lateinit var views: EditText
+    private lateinit var followers: EditText
+    private val prefs by lazy { getSharedPreferences("promotion_progress", Context.MODE_PRIVATE) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        if (BuildConfig.DEBUG) {
-            FirebaseAppCheck.getInstance().installAppCheckProviderFactory(
-                DebugAppCheckProviderFactory.getInstance()
-            )
-        } else {
-            FirebaseAppCheck.getInstance().installAppCheckProviderFactory(
-                PlayIntegrityAppCheckProviderFactory.getInstance()
-            )
-        }
-        tts = TextToSpeech(this, this)
-        auth = FirebaseAuth.getInstance()
-        firestore = FirebaseFirestore.getInstance()
-        setupAiChat()
-        window.statusBarColor = Color.rgb(13, 18, 38)
-        window.navigationBarColor = Color.rgb(13, 18, 38)
+        window.statusBarColor = Color.rgb(16, 36, 62)
+        window.navigationBarColor = Color.rgb(16, 36, 62)
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER_HORIZONTAL
-            setPadding(24, 36, 24, 24)
-            setBackgroundColor(Color.rgb(13, 18, 38))
+            setPadding(22, 26, 22, 24)
+            setBackgroundColor(Color.rgb(10, 25, 45))
         }
-        val title = TextView(this).apply {
-            text = "Veysin AI"
-            textSize = 32f
+        fun heading(text: String, size: Float = 20f) = TextView(this).apply {
+            this.text = text
+            textSize = size
             setTextColor(Color.WHITE)
-            gravity = Gravity.CENTER
+            setPadding(0, 12, 0, 8)
         }
-        root.addView(title)
-        val subtitle = TextView(this).apply {
-            text = "Your all-in-one AI assistant"
+        fun field(hintText: String, type: Int = InputType.TYPE_CLASS_TEXT) = EditText(this).apply {
+            hint = hintText
+            inputType = type
             textSize = 15f
-            setTextColor(Color.rgb(185, 195, 220))
-            gravity = Gravity.CENTER
-            setPadding(0, 8, 0, 18)
-        }
-        root.addView(subtitle)
-
-        val authHeading = TextView(this).apply {
-            text = "Account"
-            textSize = 20f
-            setTextColor(Color.WHITE)
-            gravity = Gravity.CENTER
-            setPadding(0, 8, 0, 8)
-        }
-        root.addView(authHeading)
-        emailInput = EditText(this).apply {
-            hint = "Email address"
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
-            setTextColor(Color.WHITE)
-            setHintTextColor(Color.LTGRAY)
-            setPadding(14, 10, 14, 10)
-            setBackgroundColor(Color.rgb(35, 43, 67))
-        }
-        root.addView(emailInput, fullWidth())
-        passwordInput = EditText(this).apply {
-            hint = "Password (minimum 6 characters)"
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
-            setTextColor(Color.WHITE)
-            setHintTextColor(Color.LTGRAY)
-            setPadding(14, 10, 14, 10)
-            setBackgroundColor(Color.rgb(35, 43, 67))
-        }
-        root.addView(passwordInput, fullWidth())
-        authStatus = TextView(this).apply {
-            text = "Not signed in"
-            textSize = 13f
-            setTextColor(Color.rgb(185, 195, 220))
-            setPadding(2, 6, 2, 8)
-        }
-        root.addView(authStatus)
-        val signIn = Button(this).apply {
-            text = "Sign in"
-            isAllCaps = false
-            setOnClickListener { signIn() }
-        }
-        root.addView(signIn, fullWidth())
-        val createAccount = Button(this).apply {
-            text = "Create account"
-            isAllCaps = false
-            setOnClickListener { createAccount() }
-        }
-        root.addView(createAccount, fullWidth())
-        val signOut = Button(this).apply {
-            text = "Sign out"
-            isAllCaps = false
-            setOnClickListener {
-                auth.signOut()
-                authStatus.text = "Signed out"
-                Toast.makeText(this@MainActivity, "Signed out.", Toast.LENGTH_SHORT).show()
-            }
-        }
-        root.addView(signOut, fullWidth())
-        auth.currentUser?.let {
-            authStatus.text = "Signed in as ${it.email ?: "user"}"
-        }
-
-        val section = TextView(this).apply {
-            text = "English to Bengali Translator"
-            textSize = 19f
-            setTextColor(Color.WHITE)
-            gravity = Gravity.CENTER
-            setPadding(0, 20, 0, 8)
-        }
-        root.addView(section)
-        input = EditText(this).apply {
-            hint = "Type English text to translate into Bengali"
-            textSize = 16f
             setTextColor(Color.WHITE)
             setHintTextColor(Color.LTGRAY)
             setPadding(14, 12, 14, 12)
-            setBackgroundColor(Color.rgb(35, 43, 67))
+            setBackgroundColor(Color.rgb(30, 49, 72))
         }
-        root.addView(input, fullWidth())
-        val translate = Button(this).apply {
-            text = "Translate English → Bengali"
+        fun button(label: String, action: () -> Unit) = Button(this).apply {
+            text = label
             isAllCaps = false
-            setOnClickListener { translateText() }
+            setOnClickListener { action() }
         }
-        root.addView(translate, fullWidth())
-        output = TextView(this).apply {
-            text = "Translation will appear here."
-            textSize = 17f
-            setTextColor(Color.WHITE)
-            setPadding(4, 18, 4, 18)
+        fun addFull(view: android.view.View) {
+            root.addView(view, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { bottomMargin = 8 })
         }
-        root.addView(output)
 
-        val speak = Button(this).apply {
-            text = "🔊 Read Bengali aloud"
-            isAllCaps = false
-            setOnClickListener {
-                val spokenText = output.text.toString()
-                if (spokenText.isNotBlank() && spokenText != "Translation will appear here.") {
-                    tts?.language = Locale("bn", "IN")
-                    tts?.speak(spokenText, TextToSpeech.QUEUE_FLUSH, null, "veysin-tts")
-                } else {
-                    Toast.makeText(this@MainActivity, "Translate some text first.", Toast.LENGTH_SHORT).show()
-                }
-            }
-        }
-        root.addView(speak, fullWidth())
-
-        val chatHeading = TextView(this).apply {
-            text = "Veysin AI Chat"
-            textSize = 21f
-            setTextColor(Color.WHITE)
-            gravity = Gravity.CENTER
-            setPadding(0, 24, 0, 10)
-        }
-        root.addView(chatHeading)
-        chatOutput = TextView(this).apply {
-            text = "Hello! Ask me anything."
-            textSize = 16f
-            setTextColor(Color.WHITE)
+        addFull(heading("Life in India Diaries", 27f))
+        addFull(heading("Free • Safe • Organic Promotion", 15f))
+        val safety = TextView(this).apply {
+            text = "নিরাপত্তা: এই অ্যাপ Facebook পাসওয়ার্ড চাইবে না, অটো-ফলোয়ার/ভুয়া ভিউ তৈরি করবে না এবং আপনার হয়ে কোনো লাইক বা ফলো করবে না।"
+            textSize = 14f
+            setTextColor(Color.rgb(185, 220, 205))
             setPadding(12, 12, 12, 12)
-            setBackgroundColor(Color.rgb(35, 43, 67))
+            setBackgroundColor(Color.rgb(22, 57, 54))
         }
-        root.addView(chatOutput, fullWidth())
-        chatInput = EditText(this).apply {
-            hint = "Type your message..."
-            textSize = 16f
-            setTextColor(Color.WHITE)
-            setHintTextColor(Color.LTGRAY)
-            setPadding(14, 12, 14, 12)
-            setBackgroundColor(Color.rgb(35, 43, 67))
-        }
-        root.addView(chatInput, fullWidth())
-        val send = Button(this).apply {
-            text = "Send message"
-            isAllCaps = false
-            setOnClickListener { onSendChat() }
-        }
-        root.addView(send, fullWidth())
+        addFull(safety)
 
-        listOf("AI Image", "AI Video").forEach { feature ->
-            val button = Button(this).apply {
-                text = feature
-                isAllCaps = false
-                setOnClickListener {
-                    Toast.makeText(this@MainActivity,
-                        "$feature is not enabled yet. AI Chat is connected separately.",
-                        Toast.LENGTH_LONG).show()
-                }
-            }
-            root.addView(button, fullWidth())
+        addFull(heading("১) ভিডিওর লিংক"))
+        link = field("Facebook Reel / ভিডিও লিংক", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI)
+        addFull(link)
+        addFull(heading("২) ভিডিওর বিষয় (ঐচ্ছিক)"))
+        topic = field("যেমন: Bangalore life, daily vlog, comedy")
+        addFull(topic)
+        addFull(button("ক্যাপশন ও হ্যাশট্যাগ তৈরি করুন") { makeCaption() })
+        result = TextView(this).apply {
+            text = "তৈরি করা ক্যাপশন এখানে দেখা যাবে।"
+            textSize = 15f
+            setTextColor(Color.WHITE)
+            setPadding(14, 14, 14, 14)
+            setBackgroundColor(Color.rgb(30, 49, 72))
         }
+        addFull(result)
+        addFull(button("ক্যাপশন কপি করুন") {
+            val clip = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            clip.setPrimaryClip(ClipData.newPlainText("Promotion caption", result.text))
+            Toast.makeText(this, "কপি হয়েছে", Toast.LENGTH_SHORT).show()
+        })
+        addFull(button("ভিডিও শেয়ার করুন") { shareVideo() })
+
+        addFull(heading("৩) নিজের অগ্রগতি লিখে রাখুন"))
+        views = field("বর্তমান ভিউ", InputType.TYPE_CLASS_NUMBER)
+        followers = field("বর্তমান ফলোয়ার", InputType.TYPE_CLASS_NUMBER)
+        addFull(views)
+        addFull(followers)
+        addFull(button("অগ্রগতি সেভ করুন") { saveProgress() })
+        addFull(button("সেভ করা অগ্রগতি দেখুন") { showProgress() })
+
         val note = TextView(this).apply {
-            text = "AI Chat uses Firebase AI Logic and the Gemini Developer API. Free-tier quotas apply. Translation runs on-device."
-            textSize = 12f
-            setTextColor(Color.rgb(145, 155, 180))
-            gravity = Gravity.CENTER
-            setPadding(0, 16, 0, 0)
+            text = "মনে রাখবেন: লিংক পেস্ট করলেই Facebook-এর ভিউ বা ফলোয়ার স্বয়ংক্রিয়ভাবে বাড়ে না। এই টুল নিরাপদ প্রচারের লেখা ও পরিকল্পনা বানায়। পোস্টের ফলাফল Facebook/Meta-তে আলাদাভাবে দেখুন।"
+            textSize = 13f
+            setTextColor(Color.rgb(190, 200, 215))
+            setPadding(0, 18, 0, 8)
         }
-        root.addView(note)
+        addFull(note)
         setContentView(ScrollView(this).apply { addView(root) })
     }
 
-    private fun setupAiChat() {
-        try {
-            val model = Firebase.ai(backend = GenerativeBackend.googleAI())
-                .generativeModel("gemini-3.8-flash")
-            val chat = model.startChat()
-            sendChatMessage = { message ->
-                chatScope.launch {
-                    chatOutput.text = "You: $message\n\nVeysin AI is thinking..."
-                    try {
-                        val response = chat.sendMessage(message)
-                        chatOutput.text = "You: $message\n\nVeysin AI: ${response.text ?: "No text response."}"
-                    } catch (error: Exception) {
-                        chatOutput.text = "Message could not be sent. Check Firebase AI Logic setup, App Check debug token, and internet connection.\n\nDetails: ${error.localizedMessage ?: "Unknown error"}"
-                    }
-                }
-            }
-        } catch (error: Exception) {
-            sendChatMessage = null
-        }
-    }
-
-    private fun onSendChat() {
-        val message = chatInput.text.toString().trim()
-        if (message.isEmpty()) {
-            Toast.makeText(this, "Type a message first.", Toast.LENGTH_SHORT).show()
+    private fun makeCaption() {
+        val url = link.text.toString().trim()
+        val subject = topic.text.toString().trim().ifBlank { "আমার নতুন ভিডিও" }
+        if (url.isNotBlank() && !(url.startsWith("https://") || url.startsWith("http://"))) {
+            Toast.makeText(this, "সঠিক https:// ভিডিও লিংক দিন", Toast.LENGTH_LONG).show()
             return
         }
-        val sender = sendChatMessage
-        if (sender == null) {
-            Toast.makeText(this, "AI Chat setup is not ready. Check Firebase AI Logic.", Toast.LENGTH_LONG).show()
+        result.text = "$subject ❤️\n\nভিডিওটি ভালো লাগলে আপনার মতামত কমেন্টে জানাবেন। এমন আরও ভিডিও পেতে Life in India Diaries ফলো করে পাশে থাকুন।\n\n#LifeInIndiaDiaries #IndiaVlog #BanglaVlog #FacebookReels #DailyLife"
+    }
+
+    private fun shareVideo() {
+        val url = link.text.toString().trim()
+        if (url.isBlank() || !(url.startsWith("https://") || url.startsWith("http://"))) {
+            Toast.makeText(this, "আগে একটি সঠিক ভিডিও লিংক দিন", Toast.LENGTH_SHORT).show()
             return
         }
-        chatInput.text.clear()
-        sender(message)
+        val share = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, result.text.toString() + "\n" + url)
+        }
+        startActivity(Intent.createChooser(share, "ভিডিও শেয়ার করুন"))
     }
 
-    private fun signIn() {
-        val email = emailInput.text.toString().trim()
-        val password = passwordInput.text.toString()
-        if (email.isEmpty() || password.isEmpty()) {
-            Toast.makeText(this, "Enter your email and password.", Toast.LENGTH_SHORT).show()
+    private fun saveProgress() {
+        val v = views.text.toString().toLongOrNull()
+        val f = followers.text.toString().toLongOrNull()
+        if (v == null || f == null) {
+            Toast.makeText(this, "ভিউ ও ফলোয়ারের সংখ্যা লিখুন", Toast.LENGTH_SHORT).show()
             return
         }
-        authStatus.text = "Signing in…"
-        auth.signInWithEmailAndPassword(email, password)
-            .addOnSuccessListener { result ->
-                val user = result.user
-                if (user == null) {
-                    authStatus.text = "Sign-in failed."
-                    return@addOnSuccessListener
-                }
-                saveUserProfile(user.uid, email)
-            }
-            .addOnFailureListener { error ->
-                authStatus.text = "Sign-in failed."
-                Toast.makeText(this, error.localizedMessage ?: "Firebase sign-in failed.", Toast.LENGTH_LONG).show()
-            }
+        prefs.edit().putLong("views", v).putLong("followers", f).apply()
+        Toast.makeText(this, "অগ্রগতি এই ফোনে সেভ হয়েছে", Toast.LENGTH_SHORT).show()
     }
 
-    private fun createAccount() {
-        val email = emailInput.text.toString().trim()
-        val password = passwordInput.text.toString()
-        if (email.isEmpty() || password.length < 6) {
-            Toast.makeText(this, "Enter a valid email and a password with at least 6 characters.", Toast.LENGTH_LONG).show()
-            return
-        }
-        authStatus.text = "Creating account…"
-        auth.createUserWithEmailAndPassword(email, password)
-            .addOnSuccessListener { result ->
-                val user = result.user
-                if (user == null) {
-                    authStatus.text = "Account creation failed."
-                    return@addOnSuccessListener
-                }
-                saveUserProfile(user.uid, email)
-            }
-            .addOnFailureListener { error ->
-                authStatus.text = "Account creation failed."
-                Toast.makeText(this, error.localizedMessage ?: "Firebase account creation failed.", Toast.LENGTH_LONG).show()
-            }
-    }
-
-    private fun saveUserProfile(uid: String, email: String) {
-        val userDoc = firestore.collection("users").document(uid)
-        userDoc.get()
-            .addOnSuccessListener { snapshot ->
-                val profile = hashMapOf<String, Any>(
-                    "email" to email,
-                    "lastLoginAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
-                )
-                if (!snapshot.exists()) {
-                    profile["createdAt"] = com.google.firebase.firestore.FieldValue.serverTimestamp()
-                }
-                userDoc.set(profile, SetOptions.merge())
-                    .addOnSuccessListener {
-                        authStatus.text = "Signed in as $email • Firebase profile synced"
-                        Toast.makeText(this, "Account connected to Firebase.", Toast.LENGTH_SHORT).show()
-                    }
-                    .addOnFailureListener { error ->
-                        authStatus.text = "Signed in, but profile sync failed."
-                        Toast.makeText(this, error.localizedMessage ?: "Firestore write failed.", Toast.LENGTH_LONG).show()
-                    }
-            }
-            .addOnFailureListener { error ->
-                authStatus.text = "Signed in, but database could not be read."
-                Toast.makeText(this, error.localizedMessage ?: "Firestore read failed.", Toast.LENGTH_LONG).show()
-            }
-    }
-
-    private fun fullWidth() = LinearLayout.LayoutParams(
-        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-    ).apply { bottomMargin = 8 }
-
-    private fun translateText() {
-        val source = input.text.toString().trim()
-        if (source.isEmpty()) {
-            Toast.makeText(this, "Please enter English text.", Toast.LENGTH_SHORT).show()
-            return
-        }
-        output.text = "Preparing free Bengali translation model…"
-        val options = TranslatorOptions.Builder()
-            .setSourceLanguage(TranslateLanguage.ENGLISH)
-            .setTargetLanguage(TranslateLanguage.BENGALI)
-            .build()
-        val translator = Translation.getClient(options)
-        val conditions = DownloadConditions.Builder().build()
-        translator.downloadModelIfNeeded(conditions)
-            .addOnSuccessListener {
-                translator.translate(source)
-                    .addOnSuccessListener { translated ->
-                        output.text = translated
-                        translator.close()
-                    }
-                    .addOnFailureListener { error ->
-                        output.text = "Translation failed: ${error.localizedMessage}"
-                        translator.close()
-                    }
-            }
-            .addOnFailureListener { error ->
-                output.text = "Model download failed: ${error.localizedMessage}"
-                translator.close()
-            }
-    }
-
-    override fun onInit(status: Int) {
-        if (status == TextToSpeech.SUCCESS) {
-            tts?.language = Locale("bn", "IN")
-        }
-    }
-
-    override fun onDestroy() {
-        chatScope.cancel()
-        tts?.stop()
-        tts?.shutdown()
-        super.onDestroy()
+    private fun showProgress() {
+        val v = prefs.getLong("views", 0L)
+        val f = prefs.getLong("followers", 0L)
+        Toast.makeText(this, "সেভ করা তথ্য: ভিউ $v • ফলোয়ার $f", Toast.LENGTH_LONG).show()
     }
 }
